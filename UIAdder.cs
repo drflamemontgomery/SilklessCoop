@@ -1,6 +1,6 @@
 ﻿using BepInEx.Logging;
-using SilklessCoop.Connectors;
 using System.Linq;
+using TeamCherry.Localization;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -26,8 +26,14 @@ namespace SilklessCoop
 
         private void Update()
         {
-            if (Input.GetKeyDown(Config.MultiplayerToggleKey))
-                ToggleConnector();
+            if (_connector.Initialized)
+            {
+                if (Input.GetKeyDown(Config.MultiplayerToggleKey))
+                {
+                    if (_connector.Active) _connector.Disable();
+                    else _connector.Enable();
+                }
+            }
 
             if (!_mainMenu) _mainMenu = Resources.FindObjectsOfTypeAll<GameObject>().FirstOrDefault(g => g.name == "MainMenuScreen");
             if (!_mainMenu) return;
@@ -50,24 +56,19 @@ namespace SilklessCoop
                 et.triggers.Clear();
 
                 EventTrigger.Entry e = new EventTrigger.Entry();
-                e.callback.AddListener((eventData) => ToggleConnector());
+                e.callback.AddListener((eventData) =>
+                {
+                    if (!_connector.Initialized) return;
+
+                    if (_connector.Active) _connector.Disable();
+                    else _connector.Enable();
+                });
                 et.triggers.Add(e);
 
                 Logger.LogInfo("Added main menu button.");
             }
 
-            if (!_connector) return;
-            if (!_connector.Initialized) return;
-
-            _mainMenuText.text = _connector.Enabled ? $"Disable Multiplayer [{Config.ConnectionType}]" : $"Enable Multiplayer [{Config.ConnectionType}]";
-        }
-
-        private void ToggleConnector()
-        {
-            if (!_connector.Initialized) return;
-
-            if (_connector.Enabled) _connector.Disable();
-            else _connector.Enable();
+            _mainMenuText.text = _connector.Active ? $"Disable Multiplayer [{Config.ConnectionType}]" : $"Enable Multiplayer [{Config.ConnectionType}]";
         }
     }
 }

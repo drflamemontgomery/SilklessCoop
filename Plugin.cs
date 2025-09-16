@@ -1,5 +1,5 @@
 ﻿using BepInEx;
-using SilklessCoop.Connectors;
+using HarmonyLib;
 using UnityEngine;
 
 namespace SilklessCoop;
@@ -7,15 +7,19 @@ namespace SilklessCoop;
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 public class Plugin : BaseUnityPlugin
 {
+
+    static Harmony patcher;
+    public static Plugin Instance;
+
     private void Awake()
     {
-        gameObject.SetName("SilklessCoop");
-        DontDestroyOnLoad(gameObject);
-
+        Instance = this;
+        patcher = new Harmony(MyPluginInfo.PLUGIN_GUID);
+        patcher.PatchAll();
         // bind configs
         ModConfig config = new ModConfig();
         config.MultiplayerToggleKey = Config.Bind<KeyCode>("General", "Toggle Key", KeyCode.F5, "Key used to toggle multiplayer.").Value;
-        config.ConnectionType = Config.Bind<ConnectionType>("General", "Connection Type", ConnectionType.STEAM_P2P, "Method used to connect with other players.").Value;
+        config.ConnectionType = Config.Bind<ConnectionType>("General", "Connection Type", ConnectionType.STEAM_P2P, "Choose echoserver for standalone or steam_p2p for Steam.").Value;
         config.TickRate = Config.Bind<int>("General", "Tick Rate", 20, "Messages per second sent to the server.").Value;
         config.SyncCompasses = Config.Bind<bool>("General", "Sync Compasses", true, "Enables seeing other players compasses on your map.").Value;
 
@@ -28,32 +32,37 @@ public class Plugin : BaseUnityPlugin
         config.ActiveCompassOpacity = Config.Bind<float>("Visuals", "Active Compass Opacity", 0.7f, "Opacity of other players' compasses while they have their map open.").Value;
         config.InactiveCompassOpacity = Config.Bind<float>("Visuals", "Inactive Compass Opacity", 0.35f, "Opacity of other players' compasses while they have their map closed.").Value;
 
-        config.Version = MyPluginInfo.PLUGIN_VERSION;
-
         // set up mod
         Logger.LogInfo($"Loading {MyPluginInfo.PLUGIN_GUID}...");
 
-        GameSync gs = gameObject.AddComponent<GameSync>();
-        gs.Logger = Logger;
-        gs.Config = config;
+        GameObject persistentObject = new GameObject("SilklessCoop");
+        DontDestroyOnLoad(persistentObject);
 
-        NetworkInterface ni = gameObject.AddComponent<NetworkInterface>();
-        ni.Logger = Logger;
-        ni.Config = config;
+        GameSync sync = persistentObject.AddComponent<GameSync>();
+        sync.Logger = Logger;
+        sync.Config = config;
 
-        UIAdder ua = gameObject.AddComponent<UIAdder>();
+        UIAdder ua = persistentObject.AddComponent<UIAdder>();
         ua.Logger = Logger;
         ua.Config = config;
 
-        Connector co = null;
-        if (config.ConnectionType == ConnectionType.STEAM_P2P) co = gameObject.AddComponent<SteamConnector>();
-        if (config.ConnectionType == ConnectionType.ECHOSERVER) co = gameObject.AddComponent<StandaloneConnector>();
-        if (config.ConnectionType == ConnectionType.DEBUG) co = gameObject.AddComponent<DebugConnector>();
-        if (co == null) { Logger.LogError($"Connector could not be selected!"); return; }
-        co.Logger = Logger;
-        co.Config = config;
 
-        if (!co.Init()) { Logger.LogError($"{co.GetConnectorName()} failed to initialize!"); return; }
+        GeoPatch.Logger = Logger;
+        HealthPatch.Logger = Logger;
+
+        Connector c = null;
+        if (config.ConnectionType == ConnectionType.ECHOSERVER) c = persistentObject.AddComponent<StandaloneConnector>();
+        if (config.ConnectionType == ConnectionType.STEAM_P2P) c = persistentObject.AddComponent<SteamConnector>();
+        c.Logger = Logger;
+        c.Config = config;
+
+        if (!c.Init())
+        {
+            Logger.LogError($"{c.GetName()} has failed to initialize!");
+            return;
+        }
+
+        Logger.LogInfo($"{c.GetName()} has initialized successfully.");
 
         Logger.LogInfo($"{MyPluginInfo.PLUGIN_GUID} has initialized successfully.");
     }
